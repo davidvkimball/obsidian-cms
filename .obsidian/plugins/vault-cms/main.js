@@ -1088,6 +1088,7 @@ var WizardStateManager = class {
       enableEditingToolbar: (_c = (_b = settings.enableEditingToolbar) != null ? _b : settings.enableWYSIWYG) != null ? _c : false,
       enableMdxSupport: settings.enableMdxSupport,
       enableExtendedFileTypes: settings.enableExtendedFileTypes,
+      deploymentPlatform: settings.deploymentPlatform || "",
       enabledPlugins: settings.enabledPlugins || [],
       disabledPlugins: settings.disabledPlugins || [],
       theme: settings.theme || "",
@@ -1192,6 +1193,7 @@ var WizardStateManager = class {
     }
     this.state.enableMdxSupport = settings.enableMdxSupport;
     this.state.enableExtendedFileTypes = settings.enableExtendedFileTypes;
+    this.state.deploymentPlatform = settings.deploymentPlatform || "";
     this.state.enabledPlugins = settings.enabledPlugins || [];
     this.state.disabledPlugins = settings.disabledPlugins || [];
     this.state.theme = settings.theme || "";
@@ -1281,6 +1283,7 @@ var WizardStateManager = class {
     }
     settings.enableMdxSupport = (_d = this.state.enableMdxSupport) != null ? _d : false;
     settings.enableExtendedFileTypes = (_e = this.state.enableExtendedFileTypes) != null ? _e : false;
+    settings.deploymentPlatform = this.state.deploymentPlatform || "";
     settings.enabledPlugins = this.state.enabledPlugins;
     settings.disabledPlugins = this.state.disabledPlugins;
     settings.theme = this.state.theme;
@@ -1768,6 +1771,87 @@ var ContentTypeDetector = class {
   }
 };
 
+// src/utils/VaultNicknameConfig.ts
+var VaultNicknameConfigurator = class {
+  constructor(app) {
+    this.pluginId = "vault-nickname";
+    this.sharedFileName = "data-shared.json";
+    this.app = app;
+  }
+  /** The currently saved nickname (empty string when none is set). */
+  async getNickname() {
+    const live = this.livePlugin();
+    if ((live == null ? void 0 : live.sharedSettings) && typeof live.sharedSettings.nickname === "string") {
+      return live.sharedSettings.nickname;
+    }
+    const data = await this.readShared();
+    const nickname = data["nickname"];
+    return typeof nickname === "string" ? nickname : "";
+  }
+  /** Save the nickname; a blank value falls back to the vault's folder name. */
+  async saveNickname(nickname) {
+    const value = nickname.trim();
+    const live = this.livePlugin();
+    if ((live == null ? void 0 : live.sharedSettings) && typeof live.saveSettings === "function") {
+      live.sharedSettings.nickname = value;
+      if (live.settings && "nickname" in live.settings) {
+        delete live.settings["nickname"];
+      }
+      await live.saveSettings();
+      return;
+    }
+    const shared = await this.readShared();
+    shared["nickname"] = value;
+    await this.writeShared(shared);
+    await this.cleanupStrayDataJsonKey();
+  }
+  livePlugin() {
+    var _a, _b;
+    return (_b = (_a = this.app.plugins) == null ? void 0 : _a.plugins) == null ? void 0 : _b[this.pluginId];
+  }
+  pluginDir() {
+    return `${this.app.vault.configDir}/plugins/${this.pluginId}`;
+  }
+  sharedPath() {
+    return `${this.pluginDir()}/${this.sharedFileName}`;
+  }
+  async readShared() {
+    return this.readJson(this.sharedPath());
+  }
+  async writeShared(data) {
+    const adapter = this.app.vault.adapter;
+    const dir = this.pluginDir();
+    if (!await adapter.exists(dir)) {
+      await adapter.mkdir(dir);
+    }
+    await adapter.write(this.sharedPath(), JSON.stringify(data, null, 2));
+  }
+  /** Remove the nickname key an earlier version mistakenly wrote to data.json. */
+  async cleanupStrayDataJsonKey() {
+    const path13 = `${this.pluginDir()}/data.json`;
+    const adapter = this.app.vault.adapter;
+    if (!await adapter.exists(path13)) {
+      return;
+    }
+    const data = await this.readJson(path13);
+    if ("nickname" in data) {
+      delete data["nickname"];
+      await adapter.write(path13, JSON.stringify(data, null, 2));
+    }
+  }
+  async readJson(path13) {
+    const adapter = this.app.vault.adapter;
+    if (await adapter.exists(path13)) {
+      try {
+        return JSON.parse(await adapter.read(path13));
+      } catch (error) {
+        console.warn("VaultNicknameConfig: could not parse", path13, error);
+      }
+    }
+    return {};
+  }
+};
+
 // src/ui/wizard/ProjectDetectionStep.ts
 init_VaultPathHelper();
 function setCssProps2(element, props) {
@@ -1784,6 +1868,19 @@ var ProjectDetectionStep = class extends BaseWizardStep {
     this.projectDetector = new ProjectDetector(app);
     this.mdxDetector = new MdxDetector(app);
     this.contentTypeDetector = new ContentTypeDetector(app);
+    this.vaultNicknameConfigurator = new VaultNicknameConfigurator(app);
+  }
+  /** Renders the optional vault nickname field, seeding from the saved value the first time the step is shown. */
+  async renderVaultNicknameSetting(containerEl) {
+    if (this.state.vaultNickname === void 0) {
+      this.state.vaultNickname = await this.vaultNicknameConfigurator.getNickname();
+    }
+    new import_obsidian6.Setting(containerEl).setName("Vault nickname").setDesc("Display name for this vault, shown instead of the folder name. Leave blank to keep the folder name.").addText((text) => {
+      var _a;
+      return text.setPlaceholder("Vault CMS").setValue((_a = this.state.vaultNickname) != null ? _a : "").onChange((value) => {
+        this.state.vaultNickname = value;
+      });
+    });
   }
   async display() {
     var _a, _b, _c, _d, _e, _f;
@@ -1925,6 +2022,7 @@ var ProjectDetectionStep = class extends BaseWizardStep {
           this.state.enableExtendedFileTypes = value;
         });
       });
+      await this.renderVaultNicknameSetting(containerEl);
     } else {
       containerEl.empty();
       containerEl.createEl("h2", { text: "Project detection failed" });
@@ -10650,6 +10748,7 @@ var OptionalPluginsStep = class extends BaseWizardStep {
       { id: "omnisearch", name: "Omnisearch", category: "nice-to-have", source: "community" },
       { id: "file-name-history", name: "File Name History", category: "nice-to-have", source: "community" },
       { id: "data-files-editor", name: "Data Files Editor", category: "nice-to-have", source: "brat", repo: "davidvkimball/obsidian-data-files-editor" },
+      { id: "link-as", name: "Link As", category: "nice-to-have", source: "community" },
       { id: "tag-wrangler", name: "Tag Wrangler", category: "nice-to-have", source: "community" },
       { id: "vault-nickname", name: "Vault Nickname", category: "nice-to-have", source: "community" },
       { id: "zenmode", name: "Zen Mode", category: "nice-to-have", source: "community" },
@@ -12114,6 +12213,7 @@ var ConfigFlushService = class {
     this.homeBaseConfigurator = new HomeBaseConfigurator(app);
     this.explorerFocusConfigurator = new ExplorerFocusConfigurator(app);
     this.dataFilesEditorConfigurator = new DataFilesEditorConfigurator(app);
+    this.vaultNicknameConfigurator = new VaultNicknameConfigurator(app);
     this.editingToolbarConfigurator = new EditingToolbarConfigurator(app);
     this.fileNameHistoryConfigurator = new FileNameHistoryConfigurator(app);
   }
@@ -12123,7 +12223,7 @@ var ConfigFlushService = class {
    * needing to reach the finalization step.
    */
   async flush(state) {
-    var _a, _b;
+    var _a, _b, _c;
     console.debug("ConfigFlushService: Starting configuration flush");
     await this.basesCMSConfigurator.createOrUpdateBaseFile(
       state.contentTypes,
@@ -12204,6 +12304,7 @@ var ConfigFlushService = class {
     }
     await this.editingToolbarConfigurator.toggleVisibility(this.app, state.enableEditingToolbar);
     await this.dataFilesEditorConfigurator.saveConfig(state.enableExtendedFileTypes === true);
+    await this.vaultNicknameConfigurator.saveNickname((_c = state.vaultNickname) != null ? _c : "");
     console.debug("ConfigFlushService: Configuration flush complete");
   }
 };
@@ -12292,7 +12393,10 @@ var DeploymentStep = class extends BaseWizardStep {
     containerEl.createEl("p", {
       text: "Choose where you want to host your site. A config file will be created for your chosen platform."
     });
-    this.selectedPlatform = this.state.deploymentPlatform || "";
+    this.selectedPlatform = this.state.deploymentPlatform || this.detectConfiguredPlatform();
+    if (this.selectedPlatform) {
+      this.state.deploymentPlatform = this.selectedPlatform;
+    }
     const platforms = this.getPlatforms();
     for (const platform of platforms) {
       const setting = new import_obsidian20.Setting(containerEl);
@@ -12313,6 +12417,27 @@ var DeploymentStep = class extends BaseWizardStep {
         });
       });
     }
+  }
+  /**
+   * Detect a platform whose config file already exists in the project root.
+   * Used as a fallback so a previously configured vault still shows as
+   * selected even when no choice was persisted, and we never overwrite or
+   * regenerate the existing config file.
+   */
+  detectConfiguredPlatform() {
+    const projectRoot = this.getAbsoluteProjectRoot();
+    if (!projectRoot) return "";
+    try {
+      const fs7 = require("fs");
+      for (const platform of this.getPlatforms()) {
+        if (!platform.configFile) continue;
+        if (fs7.existsSync(path10.join(projectRoot, platform.configFile))) {
+          return platform.id;
+        }
+      }
+    } catch (e) {
+    }
+    return "";
   }
   async generateConfigFile(filename, content) {
     const projectRoot = this.getAbsoluteProjectRoot();

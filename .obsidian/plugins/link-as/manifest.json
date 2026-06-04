@@ -1,0 +1,11 @@
+{
+	"id": "link-as",
+	"name": "Link As",
+	"version": "0.0.3",
+	"minAppVersion": "1.5.0",
+	"description": "Link selected text to any note, keeping it as the display text.",
+	"author": "David V. Kimball",
+	"authorUrl": "https://davidvkimball.com",
+	"fundingUrl": "https://patreon.com/davidvkimball",
+	"isDesktopOnly": false
+}
