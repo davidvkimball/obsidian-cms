@@ -1,5 +1,5 @@
 {
-  "lastVersion": "4.0.8",
+  "lastVersion": "4.0.11",
   "aestheticStyle": "glass",
   "positionStyle": "top",
   "menuCommands": [
@@ -469,6 +469,12 @@
       "apiKey": "",
       "model": "",
       "temperature": 0.2
+    },
+    "frontmatterPrompt": {
+      "mode": "auto",
+      "properties": "title: concise, one-line note title\nsummary: 1-3 sentence note summary\ntags: YAML list of relevant keywords\ncreated: YYYY-MM-DD date when appropriate\ncategory: broad content category",
+      "language": "auto",
+      "prompt": "Generate YAML frontmatter for the current Obsidian note using the requested properties below.\n\nRequested properties:\n{properties}\n\nOutput language for generated values: {language}\n\nRules:\n- Return only one complete YAML frontmatter block wrapped in --- delimiters.\n- Use the target text as the note content.\n- Follow current and sibling-note frontmatter conventions from context when provided.\n- Keep values concise, practical, and useful for filtering or browsing.\n- Do not add explanations or markdown fences outside the YAML block."
     },
     "customPromptHistory": [],
     "customPromptTemplates": [

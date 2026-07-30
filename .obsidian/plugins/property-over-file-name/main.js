@@ -489,7 +489,7 @@ var init_QuickSwitchModal = __esm({
           }
         }
         const quickSwitcherOptions = this.getQuickSwitcherOptions();
-        const showExistingOnly = (_a = quickSwitcherOptions == null ? void 0 : quickSwitcherOptions.showExistingOnly) != null ? _a : false;
+        const showExistingOnly = this.plugin.settings.hideUnresolvedLinks || ((_a = quickSwitcherOptions == null ? void 0 : quickSwitcherOptions.showExistingOnly) != null ? _a : false);
         if (!showExistingOnly) {
           const { unresolvedLinks } = this.app.metadataCache;
           const unresolvedSet = /* @__PURE__ */ new Set();
@@ -858,7 +858,7 @@ __export(main_exports, {
   default: () => PropertyOverFileNamePlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian13 = require("obsidian");
+var import_obsidian12 = require("obsidian");
 
 // src/settings.ts
 var DEFAULT_SETTINGS = {
@@ -870,8 +870,6 @@ var DEFAULT_SETTINGS = {
   enableForDragDrop: true,
   useSimpleSearch: false,
   enableForGraphView: true,
-  enableForBacklinks: true,
-  hideUnlinkedMentionsInBacklinks: false,
   enableForTabs: true,
   enableForExplorer: false,
   folderNoteFilename: "",
@@ -880,7 +878,8 @@ var DEFAULT_SETTINGS = {
   enableForProperties: true,
   enableMdxSupport: false,
   quickSwitcherExcludedBehavior: "deemphasize",
-  linkSuggesterExcludedBehavior: "deemphasize"
+  linkSuggesterExcludedBehavior: "deemphasize",
+  hideUnresolvedLinks: false
 };
 
 // src/ui/LinkTitleSuggest.ts
@@ -1061,7 +1060,7 @@ var LinkTitleSuggest = class extends import_obsidian2.EditorSuggest {
       }
     }
     const quickSwitcherOptions = this.getQuickSwitcherOptions();
-    const showExistingOnly = (_a = quickSwitcherOptions == null ? void 0 : quickSwitcherOptions.showExistingOnly) != null ? _a : false;
+    const showExistingOnly = this.plugin.settings.hideUnresolvedLinks || ((_a = quickSwitcherOptions == null ? void 0 : quickSwitcherOptions.showExistingOnly) != null ? _a : false);
     if (!showExistingOnly) {
       const { unresolvedLinks } = this.app.metadataCache;
       const unresolvedSet = /* @__PURE__ */ new Set();
@@ -1357,7 +1356,6 @@ var SettingTab = class extends import_obsidian3.PluginSettingTab {
             await this.plugin.saveData(this.plugin.settings);
             this.plugin.updateLinkSuggester();
             this.plugin.updateGraphView();
-            this.plugin.updateBacklinks();
             this.plugin.updateTabs();
             this.plugin.updateExplorer();
             this.plugin.updateWindowFrame();
@@ -1412,6 +1410,11 @@ var SettingTab = class extends import_obsidian3.PluginSettingTab {
         control: { type: "toggle", key: "includeAliasesInSearch" }
       },
       {
+        name: "Hide unresolved links",
+        desc: "Only show notes that already exist. Hides unresolved links (placeholders for notes that have been referenced but never created) from quick switcher and link suggester results.",
+        control: { type: "toggle", key: "hideUnresolvedLinks" }
+      },
+      {
         name: "When dragging notes",
         desc: "Use property-based titles when dragging notes from the file explorer.",
         control: { type: "toggle", key: "enableForDragDrop" }
@@ -1436,30 +1439,6 @@ var SettingTab = class extends import_obsidian3.PluginSettingTab {
           setting.addToggle((toggle) => toggle.setValue(this.plugin.settings.enableForGraphView).onChange(async (value) => {
             this.plugin.settings.enableForGraphView = value;
             await this.plugin.saveSettings();
-          }));
-        }
-      },
-      {
-        name: "In backlinks and outgoing links",
-        desc: "Use the property instead of the file name in the linked mentions footer, dedicated backlinks panel, and outgoing links.",
-        // Render: side effect (backlinks refresh).
-        render: (setting) => {
-          setting.addToggle((toggle) => toggle.setValue(this.plugin.settings.enableForBacklinks).onChange(async (value) => {
-            this.plugin.settings.enableForBacklinks = value;
-            await this.plugin.saveData(this.plugin.settings);
-            this.plugin.updateBacklinks();
-          }));
-        }
-      },
-      {
-        name: "Hide unlinked mentions (backlinks panel)",
-        desc: "Hide the \u201CUnlinked mentions\u201D section in the backlinks panel and skip processing it. Useful for folder-note setups where file names like `index` make unlinked mentions noisy.",
-        // Render: side effect (backlinks refresh).
-        render: (setting) => {
-          setting.addToggle((toggle) => toggle.setValue(this.plugin.settings.hideUnlinkedMentionsInBacklinks).onChange(async (value) => {
-            this.plugin.settings.hideUnlinkedMentionsInBacklinks = value;
-            await this.plugin.saveData(this.plugin.settings);
-            this.plugin.updateBacklinks();
           }));
         }
       },
@@ -1565,7 +1544,6 @@ var SettingTab = class extends import_obsidian3.PluginSettingTab {
             this.plugin.updateLinkSuggester();
             this.plugin.updateQuickSwitcher();
             this.plugin.updateGraphView();
-            this.plugin.updateBacklinks();
             this.plugin.updateTabs();
             this.plugin.updateExplorer();
             this.plugin.updateWindowFrame();
@@ -1587,7 +1565,6 @@ var SettingTab = class extends import_obsidian3.PluginSettingTab {
           await this.plugin.saveData(this.plugin.settings);
           this.plugin.updateLinkSuggester();
           this.plugin.updateGraphView();
-          this.plugin.updateBacklinks();
           this.plugin.updateTabs();
           this.plugin.updateExplorer();
           this.plugin.updateWindowFrame();
@@ -1639,6 +1616,14 @@ var SettingTab = class extends import_obsidian3.PluginSettingTab {
       );
     });
     generalGroup.addSetting((setting) => {
+      setting.setName("Hide unresolved links").setDesc("Only show notes that already exist. Hides unresolved links (placeholders for notes that have been referenced but never created) from quick switcher and link suggester results.").addToggle(
+        (toggle) => toggle.setValue(this.plugin.settings.hideUnresolvedLinks).onChange(async (value) => {
+          this.plugin.settings.hideUnresolvedLinks = value;
+          await this.plugin.saveData(this.plugin.settings);
+        })
+      );
+    });
+    generalGroup.addSetting((setting) => {
       setting.setName("When dragging notes").setDesc("Use property-based titles when dragging notes from the file explorer.").addToggle(
         (toggle) => toggle.setValue(this.plugin.settings.enableForDragDrop).onChange(async (value) => {
           this.plugin.settings.enableForDragDrop = value;
@@ -1660,24 +1645,6 @@ var SettingTab = class extends import_obsidian3.PluginSettingTab {
         (toggle) => toggle.setValue(this.plugin.settings.enableForGraphView).onChange(async (value) => {
           this.plugin.settings.enableForGraphView = value;
           await this.plugin.saveSettings();
-        })
-      );
-    });
-    generalGroup.addSetting((setting) => {
-      setting.setName("In backlinks and outgoing links").setDesc("Use the property instead of the file name in the linked mentions footer, dedicated backlinks panel, and outgoing links.").addToggle(
-        (toggle) => toggle.setValue(this.plugin.settings.enableForBacklinks).onChange(async (value) => {
-          this.plugin.settings.enableForBacklinks = value;
-          await this.plugin.saveData(this.plugin.settings);
-          this.plugin.updateBacklinks();
-        })
-      );
-    });
-    generalGroup.addSetting((setting) => {
-      setting.setName("Hide unlinked mentions (backlinks panel)").setDesc("Hide the \u201CUnlinked mentions\u201D section in the backlinks panel and skip processing it. Useful for folder-note setups where file names like `index` make unlinked mentions noisy.").addToggle(
-        (toggle) => toggle.setValue(this.plugin.settings.hideUnlinkedMentionsInBacklinks).onChange(async (value) => {
-          this.plugin.settings.hideUnlinkedMentionsInBacklinks = value;
-          await this.plugin.saveData(this.plugin.settings);
-          this.plugin.updateBacklinks();
         })
       );
     });
@@ -1763,7 +1730,6 @@ var SettingTab = class extends import_obsidian3.PluginSettingTab {
           this.plugin.updateLinkSuggester();
           this.plugin.updateQuickSwitcher();
           this.plugin.updateGraphView();
-          this.plugin.updateBacklinks();
           this.plugin.updateTabs();
           this.plugin.updateExplorer();
           this.plugin.updateWindowFrame();
@@ -2643,622 +2609,6 @@ function safeCall(fn, self) {
   }
 }
 
-// src/services/BacklinkService.ts
-var import_obsidian8 = require("obsidian");
-var BacklinkService = class {
-  constructor(plugin) {
-    this.processedElements = /* @__PURE__ */ new WeakSet();
-    this.modifiedElements = /* @__PURE__ */ new WeakSet();
-    this.originalTextContentDescriptors = /* @__PURE__ */ new Map();
-    this.linkedTitleAssignedSourcePath = /* @__PURE__ */ new WeakMap();
-    this.linkedTitlesForTargetPath = null;
-    this.plugin = plugin;
-  }
-  /**
-   * Get display name from file's frontmatter property
-   */
-  async getDisplayName(file) {
-    if (!this.plugin.settings.enableForBacklinks) {
-      return null;
-    }
-    const { getFrontmatter: getFrontmatter2, isFileTypeSupported: isFileTypeSupported2 } = await Promise.resolve().then(() => (init_frontmatter(), frontmatter_exports));
-    if (!isFileTypeSupported2(file.extension, this.plugin.settings)) {
-      return null;
-    }
-    const frontmatter = await getFrontmatter2(this.plugin.app, file, this.plugin.settings);
-    if (frontmatter && frontmatter[this.plugin.settings.propertyKey] !== void 0 && frontmatter[this.plugin.settings.propertyKey] !== null) {
-      const propertyValue = String(frontmatter[this.plugin.settings.propertyKey]).trim();
-      if (propertyValue !== "") {
-        return propertyValue;
-      }
-    }
-    return null;
-  }
-  /**
-   * Update all backlink displays
-   */
-  updateBacklinks() {
-    if (!this.plugin.settings.enableForBacklinks) {
-      this.stopObserving();
-      return;
-    }
-    this.updateEmbeddedBacklinks();
-    void this.updateDedicatedBacklinksPanel();
-    this.startObserving();
-  }
-  /**
-   * Update embedded backlinks in markdown views
-   */
-  updateEmbeddedBacklinks() {
-    for (const leaf of this.plugin.app.workspace.getLeavesOfType("markdown")) {
-      if (!(leaf.view instanceof import_obsidian8.MarkdownView)) {
-        continue;
-      }
-      const embeddedBacklinks = leaf.view.containerEl.querySelector(".embedded-backlinks");
-      if (embeddedBacklinks) {
-        this.updateBacklinkContainer(embeddedBacklinks);
-      }
-    }
-  }
-  /**
-   * Update dedicated backlinks panel
-   */
-  async updateDedicatedBacklinksPanel() {
-    const backlinksLeaves = this.plugin.app.workspace.getLeavesOfType("backlink");
-    for (const leaf of backlinksLeaves) {
-      await leaf.loadIfDeferred();
-      if (leaf.view) {
-        const container = leaf.view.containerEl;
-        if (container) {
-          const backlinksContainer = container.querySelector(".backlinks-pane") || container.querySelector(".backlink-pane");
-          if (backlinksContainer) {
-            this.updateBacklinkContainer(backlinksContainer);
-          }
-          const outgoingLinksContainer = container.querySelector(".outgoing-link-pane") || container.querySelector(".outgoing-links");
-          if (outgoingLinksContainer) {
-            this.updateBacklinkContainer(outgoingLinksContainer);
-          }
-        }
-      }
-    }
-  }
-  /**
-   * Extract file path from an element or its parent link
-   */
-  extractFilePathFromElement(element) {
-    var _a, _b, _c, _d;
-    const resolveFileFromPathLike = (rawPathLike) => {
-      var _a2, _b2;
-      let value = rawPathLike.trim();
-      if (!value) return null;
-      value = (_b2 = (_a2 = value.split("#")[0]) == null ? void 0 : _a2.split("?")[0]) != null ? _b2 : value;
-      if (value.startsWith("file://")) value = value.slice("file://".length);
-      if (value.startsWith("vault://")) value = value.slice("vault://".length);
-      if (value.startsWith("app://") || value.startsWith("http://") || value.startsWith("https://")) {
-        try {
-          const url = new URL(value);
-          const fileParam = url.searchParams.get("file");
-          if (fileParam) {
-            try {
-              value = decodeURIComponent(fileParam);
-            } catch (e) {
-              value = fileParam;
-            }
-          } else if (url.pathname) {
-            value = url.pathname;
-          }
-        } catch (e) {
-        }
-      }
-      try {
-        value = decodeURIComponent(value);
-      } catch (e) {
-      }
-      value = value.replace(/^\/+/, "");
-      const lower = value.toLowerCase();
-      const candidates = [];
-      candidates.push(value);
-      if (!lower.endsWith(".md") && !lower.endsWith(".mdx")) {
-        candidates.push(`${value}.md`);
-        if (this.plugin.settings.enableMdxSupport) {
-          candidates.push(`${value}.mdx`);
-        }
-      }
-      for (const candidate of candidates) {
-        const file = this.plugin.app.vault.getAbstractFileByPath(candidate);
-        if (file instanceof import_obsidian8.TFile) return file;
-      }
-      return null;
-    };
-    const directDataPath = element.getAttribute("data-path");
-    if (directDataPath) {
-      const file = resolveFileFromPathLike(directDataPath);
-      if (file) return file;
-    }
-    const ancestorWithDataPath = element.closest("[data-path]");
-    if (ancestorWithDataPath) {
-      const dataPath = ancestorWithDataPath.getAttribute("data-path");
-      if (dataPath) {
-        const file = resolveFileFromPathLike(dataPath);
-        if (file) return file;
-      }
-    }
-    const descendantWithDataPath = element.querySelector("[data-path]");
-    if (descendantWithDataPath instanceof HTMLElement) {
-      const dataPath = descendantWithDataPath.getAttribute("data-path");
-      if (dataPath) {
-        const file = resolveFileFromPathLike(dataPath);
-        if (file) return file;
-      }
-    }
-    const searchResult = element.closest(".search-result");
-    if (searchResult) {
-      const rowDataPathEl = searchResult.querySelector("[data-path]");
-      if (rowDataPathEl instanceof HTMLElement) {
-        const dataPath = rowDataPathEl.getAttribute("data-path");
-        if (dataPath) {
-          const file = resolveFileFromPathLike(dataPath);
-          if (file) return file;
-        }
-      }
-      const anchors = Array.from(searchResult.querySelectorAll("a[href], a[data-href]"));
-      for (const a of anchors) {
-        const dataHref = a.getAttribute("data-href");
-        if (dataHref) {
-          const file = resolveFileFromPathLike(dataHref);
-          if (file) return file;
-        }
-        const href = a.getAttribute("href");
-        if (href) {
-          const file = resolveFileFromPathLike(href);
-          if (file) return file;
-        }
-      }
-    }
-    const link = element.closest("a") || element.querySelector("a");
-    if (link) {
-      const href = (_a = link.getAttribute("href")) != null ? _a : link.instanceOf(HTMLAnchorElement) ? link.href : null;
-      const dataHref = link.getAttribute("data-href");
-      if (dataHref) {
-        const file = resolveFileFromPathLike(dataHref);
-        if (file) return file;
-      }
-      if (href) {
-        if (href.startsWith("obsidian://")) {
-          try {
-            const url = new URL(href);
-            const fileParam = url.searchParams.get("file");
-            if (fileParam) {
-              const decodedPath = (() => {
-                try {
-                  return decodeURIComponent(fileParam);
-                } catch (e) {
-                  return fileParam;
-                }
-              })();
-              const file2 = resolveFileFromPathLike(decodedPath);
-              if (file2) return file2;
-            }
-          } catch (e) {
-          }
-        }
-        const internalLinkMatch = href.match(/#file\/([^?#]+)/);
-        if (internalLinkMatch) {
-          const filePath = (() => {
-            try {
-              return decodeURIComponent(internalLinkMatch[1]);
-            } catch (e) {
-              return internalLinkMatch[1];
-            }
-          })();
-          const file2 = resolveFileFromPathLike(filePath);
-          if (file2) return file2;
-        }
-        const file = resolveFileFromPathLike(href);
-        if (file) return file;
-      }
-    }
-    const textContent = (_b = element.textContent) == null ? void 0 : _b.trim();
-    if (textContent) {
-      if (textContent.includes("/") || textContent.includes("\\")) {
-        const resolved = resolveFileFromPathLike(textContent);
-        if (resolved) return resolved;
-      }
-      const cleaned = (_c = textContent.replace(/\.(mdx|md)$/i, "").split(/[/\\]/).pop()) != null ? _c : textContent;
-      const basename = cleaned.trim();
-      if (basename) {
-        const allFiles = this.plugin.app.vault.getFiles().filter((f) => {
-          if (!(f instanceof import_obsidian8.TFile)) return false;
-          if (f.extension === "md") return true;
-          return this.plugin.settings.enableMdxSupport && f.extension === "mdx";
-        });
-        const matchingFiles = allFiles.filter((f) => f.basename === basename);
-        if (matchingFiles.length === 1) return matchingFiles[0];
-      }
-    }
-    const searchResultRow = element.closest(".search-result");
-    if (searchResultRow) {
-      const rowText = (_d = searchResultRow.textContent) != null ? _d : "";
-      const mdParenPathRegex = /\(([^)]*?\.(?:md|mdx)(?:[#?][^)]*)?)\)/gi;
-      let match = null;
-      while ((match = mdParenPathRegex.exec(rowText)) !== null) {
-        const candidate = match[1];
-        if (!candidate) continue;
-        if (candidate.includes("://")) continue;
-        const resolved = resolveFileFromPathLike(candidate);
-        if (resolved) return resolved;
-      }
-    }
-    return null;
-  }
-  /**
-   * Update a backlink container by replacing file names with property titles
-   */
-  updateBacklinkContainer(container) {
-    void (async () => {
-      const activeFile = this.plugin.app.workspace.getActiveFile();
-      if (!(activeFile instanceof import_obsidian8.TFile)) return;
-      if (this.linkedTitlesForTargetPath !== activeFile.path) {
-        this.linkedTitlesForTargetPath = activeFile.path;
-        this.linkedTitleAssignedSourcePath = /* @__PURE__ */ new WeakMap();
-      }
-      const resolvedLinks = this.plugin.app.metadataCache.resolvedLinks;
-      const sources = [];
-      for (const [sourcePath, dests] of Object.entries(resolvedLinks)) {
-        if (!dests || typeof dests !== "object") continue;
-        if (Object.prototype.hasOwnProperty.call(dests, activeFile.path)) {
-          sources.push(sourcePath);
-        }
-      }
-      if (sources.length === 0) return;
-      sources.sort((a, b) => a.localeCompare(b));
-      const linkedHeaders = Array.from(container.querySelectorAll(".tree-item-self")).filter((h) => {
-        var _a, _b;
-        return ((_b = (_a = h.querySelector(".tree-item-inner")) == null ? void 0 : _a.textContent) != null ? _b : "").trim() === "Linked mentions";
-      });
-      for (const header of linkedHeaders) {
-        const sibling = header.nextElementSibling;
-        if (!(sibling instanceof HTMLElement)) continue;
-        if (!sibling.classList.contains("search-result-container")) continue;
-        const titleEls = Array.from(
-          sibling.querySelectorAll(".search-result-file-title .tree-item-inner")
-        );
-        if (titleEls.length === 0) continue;
-        let nextIdx = 0;
-        for (const el of titleEls) {
-          const already = this.linkedTitleAssignedSourcePath.get(el);
-          const sourcePath = already != null ? already : sources[nextIdx++];
-          if (!sourcePath) continue;
-          if (!already) this.linkedTitleAssignedSourcePath.set(el, sourcePath);
-          const file = this.plugin.app.vault.getAbstractFileByPath(sourcePath);
-          if (!(file instanceof import_obsidian8.TFile)) continue;
-          const displayName = await this.getDisplayName(file);
-          if (displayName === null) continue;
-          el.textContent = displayName;
-        }
-      }
-    })();
-    const applyUnlinkedVisibility = (hide) => {
-      const previouslyHidden = container.querySelectorAll('.pov-hidden[data-pov-unlinked-hidden="true"]');
-      previouslyHidden.forEach((el) => {
-        el.removeClass("pov-hidden");
-        el.removeAttribute("data-pov-unlinked-hidden");
-      });
-      if (!hide) return;
-      const headers = Array.from(container.querySelectorAll(".tree-item-self")).filter((h) => {
-        var _a, _b;
-        return ((_b = (_a = h.querySelector(".tree-item-inner")) == null ? void 0 : _a.textContent) != null ? _b : "").trim() === "Unlinked mentions";
-      });
-      for (const header of headers) {
-        header.addClass("pov-hidden");
-        header.setAttribute("data-pov-unlinked-hidden", "true");
-        const sibling = header.nextElementSibling;
-        if (sibling instanceof HTMLElement && sibling.classList.contains("search-result-container")) {
-          sibling.addClass("pov-hidden");
-          sibling.setAttribute("data-pov-unlinked-hidden", "true");
-        }
-      }
-    };
-    applyUnlinkedVisibility(this.plugin.settings.hideUnlinkedMentionsInBacklinks);
-    const selectors = [
-      ".tree-item-inner",
-      ".backlink-title",
-      ".backlink-file-link",
-      ".outgoing-link-file-link",
-      ".tree-item-self",
-      ".nav-file-title",
-      "[data-path]",
-      "a.internal-link"
-    ];
-    const fileElements = /* @__PURE__ */ new Set();
-    selectors.forEach((selector) => {
-      try {
-        container.querySelectorAll(selector).forEach((el) => {
-          fileElements.add(el);
-        });
-      } catch (e) {
-      }
-    });
-    fileElements.forEach((element) => {
-      if (this.processedElements.has(element)) {
-        return;
-      }
-      if (this.plugin.settings.hideUnlinkedMentionsInBacklinks) {
-        const hiddenContainer = element.closest(".search-result-container");
-        if (hiddenContainer instanceof HTMLElement && hiddenContainer.classList.contains("pov-hidden")) return;
-      }
-      const file = this.extractFilePathFromElement(element);
-      if (file && file instanceof import_obsidian8.TFile) {
-        this.updateElementWithFile(element, file);
-      }
-    });
-  }
-  /**
-   * Update an element with file's display name
-   */
-  updateElementWithFile(element, file) {
-    void (async () => {
-      var _a;
-      const displayName = await this.getDisplayName(file);
-      if (displayName === null) {
-        return;
-      }
-      this.processedElements.add(element);
-      element.setAttribute("data-pov-processed", "true");
-      const currentText = ((_a = element.textContent) == null ? void 0 : _a.trim()) || "";
-      const basename = file.basename;
-      const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const escapedBasename = escapeRegExp(basename);
-      const escapedFileName = escapeRegExp(file.name);
-      const bareBasenameTest = new RegExp(`(^|[^A-Za-z0-9])${escapedBasename}(?!\\\\.)(?=([^A-Za-z0-9]|$))`, "i");
-      const bareBasenameGlobal = new RegExp(`(^|[^A-Za-z0-9])${escapedBasename}(?!\\\\.)([^A-Za-z0-9]|$)`, "gi");
-      const fileNameGlobal = new RegExp(escapedFileName, "g");
-      const shouldUpdate = currentText.includes(file.name) || bareBasenameTest.test(currentText) || currentText.includes(`${basename}.md`) || currentText.includes(`${basename}.mdx`);
-      if (!shouldUpdate) return;
-      const link = element.closest("a") || element.querySelector("a");
-      const targetElement = link || element;
-      const updateTextInElement = (el) => {
-        var _a2;
-        if (!el) return false;
-        let changed = false;
-        try {
-          const walker = activeDocument.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-          let n = walker.nextNode();
-          while (n) {
-            const textNode = n;
-            const before = (_a2 = textNode.textContent) != null ? _a2 : "";
-            if (!before) {
-              n = walker.nextNode();
-              continue;
-            }
-            let after = before;
-            if (after.includes(file.name)) {
-              after = after.replace(fileNameGlobal, displayName);
-            }
-            after = after.replace(bareBasenameGlobal, (_match, p1, p2) => {
-              return `${p1}${displayName}${p2 != null ? p2 : ""}`;
-            });
-            if (after !== before) {
-              textNode.textContent = after;
-              changed = true;
-            }
-            n = walker.nextNode();
-          }
-        } catch (e) {
-          return false;
-        }
-        return changed;
-      };
-      updateTextInElement(targetElement);
-    })();
-  }
-  /**
-   * Start observing DOM changes for backlinks
-   */
-  startObserving() {
-    if (this.observer) {
-      return;
-    }
-    this.overrideBacklinkElements();
-    let updateTimeout = null;
-    this.observer = new MutationObserver((mutations) => {
-      let shouldUpdate = false;
-      const newElements = [];
-      for (const mutation of mutations) {
-        if (mutation.type === "childList") {
-          for (const node of Array.from(mutation.addedNodes)) {
-            if (node.instanceOf(HTMLElement)) {
-              const embeddedBacklinks = node.closest(".embedded-backlinks");
-              const backlinksPanel = node.closest(".backlinks-pane, .backlink-pane, .outgoing-link-pane, .outgoing-links, .backlink-container");
-              if (embeddedBacklinks || backlinksPanel) {
-                shouldUpdate = true;
-                const selectors = [".tree-item-inner", ".backlink-title", ".backlink-file-link", ".outgoing-link-file-link", ".tree-item-self", ".nav-file-title", "[data-path]", "a.internal-link"];
-                selectors.forEach((selector) => {
-                  var _a;
-                  try {
-                    const elements = (_a = node.querySelectorAll) == null ? void 0 : _a.call(node, selector);
-                    elements == null ? void 0 : elements.forEach((el) => {
-                      if (el.instanceOf(HTMLElement)) {
-                        newElements.push(el);
-                      }
-                    });
-                  } catch (e) {
-                  }
-                });
-              }
-            }
-          }
-        } else if (mutation.type === "characterData") {
-          const target = mutation.target;
-          if (target.instanceOf(HTMLElement)) {
-            const embeddedBacklinks = target.closest(".embedded-backlinks");
-            const backlinksPanel = target.closest(".backlinks-pane, .backlink-pane, .outgoing-link-pane, .outgoing-links, .backlink-container");
-            if (embeddedBacklinks || backlinksPanel) {
-              shouldUpdate = true;
-            }
-          } else if (target.parentElement) {
-            const embeddedBacklinks = target.parentElement.closest(".embedded-backlinks");
-            const backlinksPanel = target.parentElement.closest(".backlinks-pane, .backlink-pane, .outgoing-link-pane, .outgoing-links, .backlink-container");
-            if (embeddedBacklinks || backlinksPanel) {
-              shouldUpdate = true;
-            }
-          }
-        }
-      }
-      newElements.forEach((el) => {
-        this.overrideElementTextContent(el);
-        const file = this.extractFilePathFromElement(el);
-        if (file && file instanceof import_obsidian8.TFile) {
-          this.updateElementWithFile(el, file);
-        }
-      });
-      if (shouldUpdate) {
-        this.processedElements = /* @__PURE__ */ new WeakSet();
-        if (updateTimeout) {
-          window.clearTimeout(updateTimeout);
-        }
-        updateTimeout = window.setTimeout(() => {
-          this.updateBacklinks();
-          this.overrideBacklinkElements();
-          updateTimeout = null;
-        }, 10);
-      }
-    });
-    this.observer.observe(activeDocument.body, {
-      childList: true,
-      subtree: true,
-      characterData: true
-    });
-  }
-  /**
-   * Override textContent on all backlink elements
-   */
-  overrideBacklinkElements() {
-    const selectors = [
-      ".tree-item-inner",
-      ".backlink-title",
-      ".backlink-file-link",
-      ".outgoing-link-file-link",
-      ".tree-item-self",
-      ".nav-file-title",
-      "[data-path]",
-      "a.internal-link"
-    ];
-    const containers = [
-      ...Array.from(activeDocument.querySelectorAll(".embedded-backlinks")),
-      ...Array.from(activeDocument.querySelectorAll(".backlinks-pane")),
-      ...Array.from(activeDocument.querySelectorAll(".backlink-pane")),
-      ...Array.from(activeDocument.querySelectorAll(".outgoing-link-pane")),
-      ...Array.from(activeDocument.querySelectorAll(".outgoing-links")),
-      ...Array.from(activeDocument.querySelectorAll(".backlink-container"))
-    ];
-    containers.forEach((container) => {
-      selectors.forEach((selector) => {
-        try {
-          container.querySelectorAll(selector).forEach((el) => {
-            if (el.instanceOf(HTMLElement)) {
-              this.overrideElementTextContent(el);
-            }
-          });
-        } catch (e) {
-        }
-      });
-    });
-  }
-  /**
-   * Override textContent setter on an element to intercept Obsidian's updates
-   */
-  overrideElementTextContent(element) {
-    if (this.modifiedElements.has(element)) {
-      return;
-    }
-    const proto = Object.getPrototypeOf(element);
-    const originalDescriptor = Object.getOwnPropertyDescriptor(proto, "textContent");
-    if (originalDescriptor && originalDescriptor.set) {
-      this.originalTextContentDescriptors.set(element, originalDescriptor);
-      try {
-        Object.defineProperty(element, "textContent", {
-          set: (value) => {
-            const file = this.extractFilePathFromElement(element);
-            if (file && file instanceof import_obsidian8.TFile) {
-              void (async () => {
-                const displayName = await this.getDisplayName(file);
-                if (displayName && (value === file.basename || value === file.name || value.endsWith(file.basename))) {
-                  originalDescriptor.set.call(element, displayName);
-                  element.setAttribute("data-pov-processed", "true");
-                  this.processedElements.add(element);
-                  return;
-                }
-                originalDescriptor.set.call(element, value);
-              })();
-              return;
-            }
-            originalDescriptor.set.call(element, value);
-            element.setAttribute("data-pov-processed", "true");
-          },
-          // eslint-disable-next-line @typescript-eslint/unbound-method -- accessing property descriptor original setter
-          get: originalDescriptor.get || (() => {
-            var _a, _b;
-            return ((_b = (_a = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "textContent")) == null ? void 0 : _a.get) == null ? void 0 : _b.call(element)) || "";
-          }),
-          configurable: true,
-          enumerable: true
-        });
-      } catch (e) {
-        element.setAttribute("data-pov-processed", "true");
-      }
-    } else {
-      element.setAttribute("data-pov-processed", "true");
-    }
-    this.modifiedElements.add(element);
-  }
-  /**
-   * Stop observing DOM changes
-   */
-  stopObserving() {
-    if (this.observer) {
-      this.observer.disconnect();
-      this.observer = void 0;
-    }
-  }
-  /**
-   * Handle layout changes
-   */
-  onLayoutChange() {
-    if (this.plugin.settings.enableForBacklinks) {
-      window.setTimeout(() => {
-        this.updateBacklinks();
-      }, 100);
-    } else {
-      this.stopObserving();
-    }
-  }
-  /**
-   * Handle file open events
-   */
-  onFileOpen() {
-    if (this.plugin.settings.enableForBacklinks) {
-      window.setTimeout(() => {
-        this.updateEmbeddedBacklinks();
-      }, 200);
-    }
-  }
-  /**
-   * Clean up on unload
-   */
-  onunload() {
-    this.stopObserving();
-    this.originalTextContentDescriptors.forEach((descriptor, element) => {
-      try {
-        Object.defineProperty(element, "textContent", descriptor);
-      } catch (e) {
-      }
-    });
-    this.originalTextContentDescriptors.clear();
-    this.modifiedElements = /* @__PURE__ */ new WeakSet();
-  }
-};
-
 // src/services/TabService.ts
 init_frontmatter();
 var TabService = class {
@@ -3372,7 +2722,7 @@ var TabService = class {
 };
 
 // src/services/ExplorerService.ts
-var import_obsidian9 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 var ExplorerService = class {
   constructor(plugin) {
     // Public so ExplorerFileItemMutator can access it
@@ -3408,7 +2758,7 @@ var ExplorerService = class {
     const folderNoteFilename = this.plugin.settings.folderNoteFilename.trim();
     const folderNotePath = `${folder.path}/${folderNoteFilename}.md`;
     const folderNoteFile = this.plugin.app.vault.getAbstractFileByPath(folderNotePath);
-    if (folderNoteFile instanceof import_obsidian9.TFile) {
+    if (folderNoteFile instanceof import_obsidian8.TFile) {
       const cache = this.plugin.app.metadataCache.getFileCache(folderNoteFile);
       const propertyValue = (_a = cache == null ? void 0 : cache.frontmatter) == null ? void 0 : _a[this.plugin.settings.propertyKey];
       if (propertyValue) {
@@ -3422,7 +2772,7 @@ var ExplorerService = class {
    * Public so ExplorerFileItemMutator can access it
    */
   async resolveTitle(item) {
-    if (item.file instanceof import_obsidian9.TFile) {
+    if (item.file instanceof import_obsidian8.TFile) {
       const { getFrontmatter: getFrontmatter2, isFileTypeSupported: isFileTypeSupported2 } = await Promise.resolve().then(() => (init_frontmatter(), frontmatter_exports));
       if (!isFileTypeSupported2(item.file.extension, this.plugin.settings)) {
         return null;
@@ -3430,7 +2780,7 @@ var ExplorerService = class {
       const frontmatter = await getFrontmatter2(this.plugin.app, item.file, this.plugin.settings);
       const propertyValue = frontmatter == null ? void 0 : frontmatter[this.plugin.settings.propertyKey];
       return propertyValue ? String(propertyValue) : null;
-    } else if (item.file instanceof import_obsidian9.TFolder) {
+    } else if (item.file instanceof import_obsidian8.TFolder) {
       return this.getFolderNoteTitle(item.file);
     }
     return null;
@@ -3562,7 +2912,7 @@ var ExplorerFileItemMutator = class {
 };
 
 // src/services/WindowFrameService.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 init_frontmatter();
 var WindowFrameService = class {
   constructor(plugin) {
@@ -3600,7 +2950,7 @@ var WindowFrameService = class {
   getActiveFileTitle() {
     var _a;
     const activeFile = this.plugin.app.workspace.getActiveFile();
-    if (!(activeFile instanceof import_obsidian10.TFile)) return "";
+    if (!(activeFile instanceof import_obsidian9.TFile)) return "";
     const propertyKey = this.plugin.settings.propertyKey;
     if (activeFile.extension === "md") {
       const fileCache = this.plugin.app.metadataCache.getFileCache(activeFile);
@@ -3795,7 +3145,7 @@ var WindowFrameService = class {
 };
 
 // src/services/BookmarkService.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 init_frontmatter();
 var BookmarkService = class {
   constructor(plugin) {
@@ -3875,7 +3225,7 @@ var BookmarkService = class {
           if (pathInput && pathInput.value) {
             const path = pathInput.value;
             const abstractFile = this.plugin.app.vault.getAbstractFileByPath(path) || this.plugin.app.vault.getAbstractFileByPath(path + ".md") || this.plugin.app.vault.getAbstractFileByPath(path + ".mdx");
-            if (abstractFile instanceof import_obsidian11.TFile) {
+            if (abstractFile instanceof import_obsidian10.TFile) {
               file = abstractFile;
             }
           }
@@ -3930,7 +3280,7 @@ var BookmarkService = class {
 };
 
 // src/services/PropertiesService.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 var PropertiesService = class {
   constructor(plugin) {
     this.observer = null;
@@ -4023,13 +3373,13 @@ var PropertiesService = class {
     let file = this.plugin.app.metadataCache.getFirstLinkpathDest(possiblePath, "");
     if (file) return file;
     const abstractFile = this.plugin.app.vault.getAbstractFileByPath(possiblePath + ".md");
-    if (abstractFile instanceof import_obsidian12.TFile) return abstractFile;
+    if (abstractFile instanceof import_obsidian11.TFile) return abstractFile;
     if (this.plugin.settings.enableMdxSupport) {
       const mdxFile = this.plugin.app.vault.getAbstractFileByPath(possiblePath + ".mdx");
-      if (mdxFile instanceof import_obsidian12.TFile) return mdxFile;
+      if (mdxFile instanceof import_obsidian11.TFile) return mdxFile;
     }
     const rawFile = this.plugin.app.vault.getAbstractFileByPath(possiblePath);
-    if (rawFile instanceof import_obsidian12.TFile) return rawFile;
+    if (rawFile instanceof import_obsidian11.TFile) return rawFile;
     return null;
   }
   computeLabel(file) {
@@ -4062,7 +3412,7 @@ var PropertiesService = class {
 };
 
 // src/main.ts
-var PropertyOverFileNamePlugin = class extends import_obsidian13.Plugin {
+var PropertyOverFileNamePlugin = class extends import_obsidian12.Plugin {
   constructor(app, manifest) {
     super(app, manifest);
     try {
@@ -4095,7 +3445,6 @@ var PropertyOverFileNamePlugin = class extends import_obsidian13.Plugin {
     this.dragDropService = new DragDropService(this);
     this.cacheService = new CacheService(this);
     this.graphViewService = new GraphViewService(this);
-    this.backlinkService = new BacklinkService(this);
     this.tabService = new TabService(this);
     this.explorerService = new ExplorerService(this);
     this.windowFrameService = new WindowFrameService(this);
@@ -4108,7 +3457,7 @@ var PropertyOverFileNamePlugin = class extends import_obsidian13.Plugin {
     if (this.settings.enableMdxSupport) {
       (() => {
         const mdxFiles = this.app.vault.getFiles().filter(
-          (f) => f instanceof import_obsidian13.TFile && f.extension === "mdx"
+          (f) => f instanceof import_obsidian12.TFile && f.extension === "mdx"
         );
         for (const file of mdxFiles) {
           void frontmatterCache.get(this.app, file, this.settings);
@@ -4119,7 +3468,6 @@ var PropertyOverFileNamePlugin = class extends import_obsidian13.Plugin {
       this.updateLinkSuggester();
       this.updateQuickSwitcher();
       this.updateGraphView();
-      this.updateBacklinks();
       this.updateTabs();
       this.updateExplorer();
       this.updateWindowFrame();
@@ -4128,7 +3476,6 @@ var PropertyOverFileNamePlugin = class extends import_obsidian13.Plugin {
     }, 1e3);
     this.app.workspace.onLayoutReady(() => {
       this.graphViewService.onLayoutChange();
-      this.backlinkService.onLayoutChange();
       void this.tabService.renameTabs();
       this.updateExplorer();
       this.updateWindowFrame();
@@ -4141,17 +3488,11 @@ var PropertyOverFileNamePlugin = class extends import_obsidian13.Plugin {
     this.registerEvent(
       this.app.workspace.on("layout-change", () => {
         this.graphViewService.onLayoutChange();
-        this.backlinkService.onLayoutChange();
-      })
-    );
-    this.registerEvent(
-      this.app.workspace.on("file-open", () => {
-        this.backlinkService.onFileOpen();
       })
     );
     this.registerEvent(
       this.app.vault.on("modify", (file) => {
-        if (file instanceof import_obsidian13.TFile && (file.extension === "md" || file.extension === "mdx" && this.settings.enableMdxSupport)) {
+        if (file instanceof import_obsidian12.TFile && (file.extension === "md" || file.extension === "mdx" && this.settings.enableMdxSupport)) {
           this.cacheService.invalidateCache(file);
           frontmatterCache.invalidate(file.path);
         }
@@ -4159,7 +3500,7 @@ var PropertyOverFileNamePlugin = class extends import_obsidian13.Plugin {
     );
     this.registerEvent(
       this.app.vault.on("rename", (file, oldPath) => {
-        if (file instanceof import_obsidian13.TFile && (file.extension === "md" || file.extension === "mdx" && this.settings.enableMdxSupport)) {
+        if (file instanceof import_obsidian12.TFile && (file.extension === "md" || file.extension === "mdx" && this.settings.enableMdxSupport)) {
           this.cacheService.invalidateCache(file);
           frontmatterCache.invalidate(file.path);
         }
@@ -4167,7 +3508,7 @@ var PropertyOverFileNamePlugin = class extends import_obsidian13.Plugin {
     );
     this.registerEvent(
       this.app.vault.on("delete", (file) => {
-        if (file instanceof import_obsidian13.TFile && (file.extension === "md" || file.extension === "mdx" && this.settings.enableMdxSupport)) {
+        if (file instanceof import_obsidian12.TFile && (file.extension === "md" || file.extension === "mdx" && this.settings.enableMdxSupport)) {
           this.cacheService.invalidateCache(file);
           frontmatterCache.invalidate(file.path);
         }
@@ -4175,13 +3516,10 @@ var PropertyOverFileNamePlugin = class extends import_obsidian13.Plugin {
     );
     this.registerEvent(
       this.app.metadataCache.on("changed", (file) => {
-        if (file instanceof import_obsidian13.TFile && (file.extension === "md" || file.extension === "mdx" && this.settings.enableMdxSupport)) {
+        if (file instanceof import_obsidian12.TFile && (file.extension === "md" || file.extension === "mdx" && this.settings.enableMdxSupport)) {
           this.cacheService.rebuildCache();
           if (this.settings.enableForGraphView) {
             this.graphViewService.refreshGraphView();
-          }
-          if (this.settings.enableForBacklinks) {
-            this.backlinkService.updateBacklinks();
           }
           if (this.settings.enableForExplorer) {
             this.explorerService.updateExplorer();
@@ -4238,9 +3576,6 @@ var PropertyOverFileNamePlugin = class extends import_obsidian13.Plugin {
   updateGraphView() {
     this.graphViewService.updateGraphView();
   }
-  updateBacklinks() {
-    this.backlinkService.updateBacklinks();
-  }
   updateTabs() {
     this.tabService.updateTabs();
   }
@@ -4266,7 +3601,6 @@ var PropertyOverFileNamePlugin = class extends import_obsidian13.Plugin {
     }
     this.quickSwitcherService.restoreOriginalCommand();
     this.graphViewService.onunload();
-    this.backlinkService.onunload();
     this.tabService.onunload();
     this.explorerService.onunload();
     this.windowFrameService.onunload();
@@ -4289,3 +3623,5 @@ var PropertyOverFileNamePlugin = class extends import_obsidian13.Plugin {
     this.updateGraphView();
   }
 };
+
+/* nosourcemap */

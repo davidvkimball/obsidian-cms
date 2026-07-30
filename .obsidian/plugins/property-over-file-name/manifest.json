@@ -1,7 +1,7 @@
 {
 	"id": "property-over-file-name",
 	"name": "Property Over File Name",
-	"version": "0.7.9",
+	"version": "0.8.0",
 	"minAppVersion": "1.11.0",
 	"description": "Search, display, and insert notes using a specified note property instead of the file name.",
 	"author": "David V. Kimball",

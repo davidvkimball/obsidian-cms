@@ -201,8 +201,9 @@ var init_panel_utils = __esm({
 function removeCodeBlocks(content) {
   return content.replace(/```[\s\S]*?```/g, "").replace(/~~~[\s\S]*?~~~/g, "").replace(/`[^`\n]+`/g, "").replace(/<[^>]*>/g, "").replace(/^---\n[\s\S]*?\n---\n/, "").replace(/::\w+\{[^}]*\}/g, "");
 }
-function removeHtmlAttributes(content) {
-  return content.replace(/```[\s\S]*?```/g, "").replace(/~~~[\s\S]*?~~~/g, "").replace(/`[^`\n]+`/g, "").replace(/<[^>]*>/g, "").replace(/^---\n[\s\S]*?\n---\n/, "").replace(/::\w+\{[^}]*\}/g, "");
+function blankNonContentRegions(content) {
+  const blank = (match) => match.replace(/[^\n]/g, " ");
+  return content.replace(/```[\s\S]*?```/g, blank).replace(/~~~[\s\S]*?~~~/g, blank).replace(/`[^`\n]+`/g, blank).replace(/<[^>]*>/g, blank).replace(/^---\n[\s\S]*?\n---\n/, blank).replace(/::\w+\{[^}]*\}/g, blank);
 }
 var init_content_parser = __esm({
   "src/checks/utils/content-parser.ts"() {
@@ -345,25 +346,25 @@ function checkNakedLinks(content, file, settings) {
   if (!settings.checkNakedLinks) {
     return Promise.resolve([]);
   }
-  const cleanContent = removeHtmlAttributes(content);
-  const nakedLinks = cleanContent.match(/(?<!\]\()(?<!https?:\/\/[^\s)]*\/)https?:\/\/[^\s)]+/g);
-  if (nakedLinks) {
-    nakedLinks.forEach((link, index) => {
-      if (link.includes("web.archive.org/web/") || link.includes("archive.today/") || link.includes("archive.is/") || link.includes("web.archive.org/save/")) {
-        return;
+  const cleanContent = blankNonContentRegions(content);
+  const nakedLinkRegex = /(?<!\]\()(?<!https?:\/\/[^\s)]*\/)https?:\/\/[^\s)]+/g;
+  let match;
+  while ((match = nakedLinkRegex.exec(cleanContent)) !== null) {
+    const link = match[0];
+    if (link.includes("web.archive.org/web/") || link.includes("archive.today/") || link.includes("archive.is/") || link.includes("web.archive.org/save/")) {
+      continue;
+    }
+    const lineNumber = cleanContent.substring(0, match.index).split("\n").length;
+    results.push({
+      passed: false,
+      message: `Naked link found: ${link}`,
+      suggestion: "Convert to markdown link format: [link text](url)",
+      severity: "warning",
+      position: {
+        line: lineNumber,
+        searchText: link,
+        context: getContextAroundLine(content, lineNumber)
       }
-      const lineNumber = findLineNumberForImage(content, link);
-      results.push({
-        passed: false,
-        message: `Naked link found: ${link}`,
-        suggestion: "Convert to markdown link format: [link text](url)",
-        severity: "warning",
-        position: {
-          line: lineNumber,
-          searchText: link,
-          context: getContextAroundLine(content, lineNumber)
-        }
-      });
     });
   }
   if (results.length === 0) {
@@ -726,7 +727,7 @@ function isValidUrl(url) {
   }
 }
 function extractValidExternalLinks(content) {
-  const cleanContent = removeCodeBlocks(content);
+  const cleanContent = blankNonContentRegions(content);
   const externalLinks = [];
   let pos = 0;
   while (pos < cleanContent.length) {
@@ -796,8 +797,10 @@ function checkExternalLinks(content, file, settings) {
   }
   const uniqueLinks = extractValidExternalLinks(content);
   if (uniqueLinks.length > 0) {
-    uniqueLinks.forEach((url, index) => {
-      const lineNumber = findLineNumberForImage(content, url);
+    const cleanContent = blankNonContentRegions(content);
+    uniqueLinks.forEach((url) => {
+      const linkIndex = cleanContent.indexOf(url);
+      const lineNumber = linkIndex >= 0 ? cleanContent.substring(0, linkIndex).split("\n").length : 1;
       results.push({
         passed: true,
         message: `External link: ${url}`,
@@ -833,6 +836,7 @@ async function checkExternalBrokenLinks(content, file, settings, abortController
     });
     return Promise.resolve(results);
   }
+  const cleanContent = blankNonContentRegions(content);
   const checkTasks = uniqueLinks.map(async (url) => {
     if (abortController == null ? void 0 : abortController.signal.aborted) {
       return null;
@@ -879,15 +883,8 @@ async function checkExternalBrokenLinks(content, file, settings, abortController
       }
       let result = null;
       if (linkIsBroken) {
-        const lines = content.split("\n");
-        let lineNumber = 1;
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          if (line && line.includes(url)) {
-            lineNumber = i + 1;
-            break;
-          }
-        }
+        const linkIndex = cleanContent.indexOf(url);
+        const lineNumber = linkIndex >= 0 ? cleanContent.substring(0, linkIndex).split("\n").length : 1;
         result = {
           passed: false,
           message: errorMessage,
@@ -3953,6 +3950,7 @@ var ResultsDisplay = class {
           cls: `seo-result seo-${result.severity}`
         });
         if (result.position) {
+          const position = result.position;
           const messageEl = li.createEl("span", {
             text: result.message,
             cls: "seo-result-message seo-clickable"
@@ -3961,7 +3959,7 @@ var ResultsDisplay = class {
             e.preventDefault();
             e.stopPropagation();
             void (async () => {
-              await this.navigateToPosition(result.position);
+              await this.navigateToPosition(position);
             })();
           });
           messageEl.addClass("seo-clickable-message");
@@ -6010,3 +6008,5 @@ var SEOPlugin = class extends import_obsidian11.Plugin {
     }
   }
 };
+
+/* nosourcemap */

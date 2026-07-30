@@ -1,7 +1,7 @@
 {
 	"id": "seo",
 	"name": "Search Engine Optimization",
-	"version": "0.5.0",
+	"version": "0.5.4",
 	"minAppVersion": "1.11.0",
 	"description": "Ensure your public-facing notes are optimized for search engines and AI.",
 	"author": "David V. Kimball",

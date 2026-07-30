@@ -188,7 +188,8 @@ var VaultNicknamePlugin = class extends import_obsidian.Plugin {
       return;
     }
     event2.stopPropagation();
-    const vaults = require("electron").ipcRenderer.sendSync("vault-list");
+    const ipcRenderer = require("electron").ipcRenderer;
+    const vaults = ipcRenderer.sendSync("vault-list");
     const menu = new import_obsidian.Menu();
     for (let vaultKey in vaults) {
       const vault = vaults[vaultKey];
@@ -223,10 +224,17 @@ var VaultNicknamePlugin = class extends import_obsidian.Plugin {
           }
         }
       }
+      const isActiveVault = vault.path === this.app.vault.adapter.basePath;
       menu.addItem(
-        (item) => item.setTitle(vaultName).setChecked(vault.path === this.app.vault.adapter.basePath).onClick(
-          () => window.open(`obsidian://open?vault=${vaultKey}`)
-        )
+        (item) => item.setTitle(vaultName).setChecked(isActiveVault).onClick(() => {
+          if (isActiveVault) {
+            return;
+          }
+          const result = ipcRenderer.sendSync("vault-open", vault.path, false);
+          if (result !== true) {
+            console.error(`Failed to open vault '${vaultName}': ${result}`);
+          }
+        })
       );
     }
     menu.addSeparator();
@@ -524,6 +532,3 @@ var VaultNicknameSettingTab = class extends import_obsidian.PluginSettingTab {
     });
   }
 };
-
-
-/* nosourcemap */
